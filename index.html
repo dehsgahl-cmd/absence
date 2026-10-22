@@ -112,6 +112,7 @@ td.dates{white-space:normal;text-align:right;font-size:12.5px;max-width:260px}
 .sigbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .sigbox img{max-height:60px;max-width:180px;border:1px dashed var(--line);border-radius:6px;background:#fff;padding:4px}
 .secbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#dfeaf3;padding:8px 20px;border-bottom:1px solid #c5d6e4}
+.headbanner{background:#fff3e0;border-bottom:2px solid #b26a00;color:#6d4100;padding:8px 20px;font-size:13.5px;line-height:1.8}
 .secbar label{margin:0;font-weight:700;color:var(--pri);font-size:14px}
 .secbar select{width:auto;min-width:240px;flex:1 1 240px;max-width:460px;font-weight:600}
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18px}
@@ -204,10 +205,15 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18
   <select id="secSel" onchange="switchSection(this.value)"></select>
   <button class="btn sm" onclick="addSection()">+ شعبة جديدة</button>
   <button class="btn red sm" id="secDel" onclick="delSection()">حذف الشعبة</button>
-  <button class="btn sm" style="background:#6a1b9a" onclick="shareSection()">مشاركة الشعبة مع زميل</button>
+  <button class="btn sm" id="coShareBtn" style="background:#6a1b9a" onclick="shareSection()">مشاركة الشعبة مع زميل</button>
   <button class="btn sec sm" onclick="document.getElementById('imp').click()">فتح ملف مستلم</button>
   <button class="btn sec sm" title="كيف أفتح ملفاً وصلني؟" onclick="receiveHelp()">؟</button>
-  <button class="btn sm" id="handBtn" style="display:none;background:#b26a00" onclick="handoverSection()">إرسال إلى أستاذ (رئيس القسم)</button>
+  <button class="btn sm" id="handBtn" style="display:none;background:#b26a00" onclick="handoverSection()">إرسال إلى أستاذ</button>
+  <button class="btn sm" id="headSwitch" style="display:none;background:#455a64" onclick="switchWorkspace()">وضع رئيس القسم</button>
+</div>
+<div id="headBanner" class="headbanner" style="display:none">
+  <b>وضع رئيس القسم:</b> هذه قائمة منفصلة لتجهيز شعب الأساتذة وإرسالها لهم. موادك وغياباتك كأستاذ محفوظة كما هي،
+  وتعود إليها بزر «العودة إلى موادي».
 </div>
 
 <nav>
@@ -378,7 +384,14 @@ const dm = d => `${d.getDate()}/${d.getMonth()+1}`;
 /* Data: ROOT holds every section (شعبة) plus what the teacher shares across them.
    S is always the open section; the shared fields are copied into S.info / S.th so the rest of the code
    reads them in one place, and save() copies them back. */
-const ROOT_KEY = "iq_absence_v4";
+/* Head of department: a device becomes "authorized" once the activation code is entered (only a SHA-256
+   fingerprint of the code is kept). An authorized device can switch between two separate workspaces:
+   the head's own courses (as a teacher) and the head's workspace of lists prepared for other teachers.
+   Each workspace has its own storage, so the two never mix. */
+const HEAD_KEY="iq_absence_head", HEAD_WS_KEY="iq_absence_head_ws", HEAD_HASH="6945bcc447f5779b86827d390b3ff50803f8e1e5c1a3092e665da5367ab82887";
+const isHead = () => { try{ return localStorage.getItem(HEAD_KEY)===HEAD_HASH; }catch(e){ return false; } };
+const IN_HEAD = (()=>{ try{ return isHead() && localStorage.getItem(HEAD_WS_KEY)==="1"; }catch(e){ return false; } })();
+const ROOT_KEY = IN_HEAD ? "iq_absence_head_lists_v1" : "iq_absence_v4";
 const SHARED = ["teacher","rank","sig","univ","college","dept"];
 const newSection = (info={}) => ({
   id: uid(),
@@ -388,7 +401,7 @@ const newSection = (info={}) => ({
 let ROOT = null;
 try {
   ROOT = JSON.parse(localStorage.getItem(ROOT_KEY));
-  if (!ROOT) { // a single-section save from version 1.1 becomes the first section
+  if (!ROOT && !IN_HEAD) { // a single-section save from version 1.1 becomes the first section
     const old = JSON.parse(localStorage.getItem(KEY));
     if (old) ROOT = rootFromSingle(old);
   }
@@ -539,8 +552,6 @@ function addSection(){
 /* ---------- head of department: prepare a section and hand it to a teacher ----------
    The button shows only on a device where the activation code was entered. Only a SHA-256 fingerprint of the
    code is kept here, so the code cannot be read from the page. The mode is kept per device, outside backups. */
-const HEAD_KEY="iq_absence_head", HEAD_HASH="6945bcc447f5779b86827d390b3ff50803f8e1e5c1a3092e665da5367ab82887";
-const isHead = () => { try{ return localStorage.getItem(HEAD_KEY)===HEAD_HASH; }catch(e){ return false; } };
 function sha256hex(str){   // small SHA-256 so it also works where crypto.subtle is missing (old phones, files on disk)
   const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
   const bytes=Array.from(new TextEncoder().encode(str)), bitLen=bytes.length*8;
@@ -561,9 +572,19 @@ function sha256hex(str){   // small SHA-256 so it also works where crypto.subtle
   }
   return H.map(x=>pad((x>>>0).toString(16),8)).join("");
 }
+// switch workspaces by reloading, so every part of the page starts from the right data
+function enterWorkspace(head){
+  save();
+  try{ if (head) localStorage.setItem(HEAD_WS_KEY,"1"); else localStorage.removeItem(HEAD_WS_KEY); }catch(e){}
+  location.reload();
+}
+function switchWorkspace(){ enterWorkspace(!IN_HEAD); }
+// the link in «عن البرنامج»: authorize this device with the code, or withdraw the authorization
 function toggleHeadMode(){
   if (isHead()){
-    if (confirm("إيقاف وضع رئيس القسم على هذا الجهاز؟")){ try{ localStorage.removeItem(HEAD_KEY); }catch(e){} renderHead(); }
+    if (!confirm("إلغاء تفعيل وضع رئيس القسم على هذا الجهاز؟\n(القوائم التي جهّزتها تبقى محفوظة، وتعود إليها عند التفعيل مرة أخرى)")) return;
+    try{ localStorage.removeItem(HEAD_KEY); }catch(e){}
+    enterWorkspace(false);
     return;
   }
   const code=prompt("أدخل رمز تفعيل وضع رئيس القسم:");
@@ -571,17 +592,22 @@ function toggleHeadMode(){
   const h=sha256hex("iq-absence-head:"+code.trim().toUpperCase());
   if (h!==HEAD_HASH){ alert("الرمز غير صحيح."); return; }
   try{ localStorage.setItem(HEAD_KEY, h); }catch(e){}
-  renderHead();
-  alert("تم تفعيل وضع رئيس القسم على هذا الجهاز.\nظهر زر «إرسال إلى أستاذ» في شريط الشعبة أعلى الشاشة.");
+  alert("تم تفعيل وضع رئيس القسم على هذا الجهاز.\n\nستنتقل الآن إلى قائمة رئيس القسم: جهّز فيها شعب الأساتذة وأرسلها لهم.\nللعودة إلى موادك اضغط «العودة إلى موادي» أعلى الشاشة. بياناتك كأستاذ لا تتأثر.");
+  enterWorkspace(true);
 }
 function renderHead(){
-  const on=isHead();
-  document.getElementById("handBtn").style.display = on ? "" : "none";
-  document.getElementById("headLink").textContent = on ? "إيقاف وضع رئيس القسم" : "وضع رئيس القسم";
+  const authorized=isHead();
+  const sw=document.getElementById("headSwitch");
+  sw.style.display = authorized ? "" : "none";
+  sw.textContent = IN_HEAD ? "← العودة إلى موادي" : "وضع رئيس القسم";
+  document.getElementById("handBtn").style.display = IN_HEAD ? "" : "none";
+  document.getElementById("coShareBtn").style.display = IN_HEAD ? "none" : "";
+  document.getElementById("headBanner").style.display = IN_HEAD ? "" : "none";
+  document.getElementById("headLink").textContent = authorized ? "إلغاء تفعيل وضع رئيس القسم على هذا الجهاز" : "وضع رئيس القسم";
 }
 // the section goes over as the receiving teacher's own: no sender name or signature, lectures left as theirs
 async function handoverSection(){
-  if (!isHead()) return;
+  if (!IN_HEAD) return;
   if (!S.students.length && !confirm("هذه الشعبة لا تحتوي أسماء طلبة بعد. إرسالها رغم ذلك؟")) return;
   const sec=JSON.parse(JSON.stringify({id:S.id, info:S.info, students:S.students.map(s=>({id:s.id, name:s.name, w:s.w, reported:0})), log:[]}));
   SHARED.forEach(k=>delete sec.info[k]); delete sec.info.coSigs;
