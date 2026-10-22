@@ -205,7 +205,8 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18
   <button class="btn sm" onclick="addSection()">+ شعبة جديدة</button>
   <button class="btn red sm" id="secDel" onclick="delSection()">حذف الشعبة</button>
   <button class="btn sm" style="background:#6a1b9a" onclick="shareSection()">مشاركة الشعبة مع زميل</button>
-  <button class="btn sec sm" onclick="document.getElementById('imp').click()">استلام ملف من زميل</button>
+  <button class="btn sec sm" onclick="document.getElementById('imp').click()">فتح ملف مستلم</button>
+  <button class="btn sec sm" title="كيف أفتح ملفاً وصلني؟" onclick="receiveHelp()">؟</button>
   <button class="btn sm" id="handBtn" style="display:none;background:#b26a00" onclick="handoverSection()">إرسال إلى أستاذ (رئيس القسم)</button>
 </div>
 
@@ -589,6 +590,18 @@ async function handoverSection(){
   busy(true);
   try{ await shareBlob(new Blob([JSON.stringify(payload)],{type:"application/json"}), name); }
   finally{ busy(false); }
+}
+// how to open a file received on WhatsApp/Telegram, worded for the device in use
+function receiveHelp(){
+  const iOS=/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  const android=/Android/i.test(navigator.userAgent);
+  alert(APP
+    ? "لفتح ملف وصلك (من زميل أو من رئيس القسم):\n\n• اضغط على الملف في واتساب أو تيليغرام واختر «غيابات الطلبة».\n• أو احفظ الملف، ثم اضغط هنا «فتح ملف مستلم» واختره."
+    : iOS
+    ? "لفتح ملف وصلك على الآيفون:\n\n١. في واتساب اضغط على الملف ثم زر المشاركة ⬆️ ← «حفظ في الملفات».\n٢. ارجع إلى البرنامج واضغط «فتح ملف مستلم»، واختر الملف من «الملفات»."
+    : android
+    ? "لفتح ملف وصلك على الأندرويد:\n\n• في واتساب اضغط مطوّلاً على الملف ← زر المشاركة ← اختر «غيابات الطلبة»، فيُفتح البرنامج ويُضاف الملف تلقائياً.\n  (يعمل هذا بعد تثبيت البرنامج على الشاشة الرئيسية)\n• أو اضغط هنا «فتح ملف مستلم» واختر الملف من مجلد التنزيلات."
+    : "لفتح ملف وصلك على الحاسبة:\n\nاحفظ الملف من واتساب أو البريد، ثم اضغط «فتح ملف مستلم» واختره.");
 }
 function receiveHandover(d){
   const inc=d.section, local=ROOT.sections.find(s=>s.id===inc.id);
@@ -1155,6 +1168,15 @@ renderAll();
 if (!APP && /^https?:$/.test(location.protocol)){
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  // opened from Android's Share menu: the offline worker kept the shared file for us; import it now
+  if (/[?&]received=1/.test(location.search) && window.caches){
+    history.replaceState(null, "", location.pathname);
+    caches.open("absence-inbox").then(async box=>{
+      const res=await box.match("./inbox-file"); if (!res) return;
+      const text=await res.text(); await box.delete("./inbox-file");
+      setTimeout(()=>handleImportText(text), 300);
+    }).catch(()=>{});
+  }
 }
 </script>
 </body>

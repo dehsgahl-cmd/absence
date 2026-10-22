@@ -1,6 +1,7 @@
 ﻿// Offline support: keeps a copy of the app on the device. The page is fetched fresh when online
 // (so updates arrive), and the saved copy is used when there is no internet.
-const CACHE = "absence-202610221601";
+const CACHE = "absence-202610221621";
+const INBOX = "absence-inbox";   // a file shared into the app from WhatsApp etc. waits here for the page
 const FILES = ["./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png"];
 
@@ -10,13 +11,27 @@ self.addEventListener("install", e => {
 
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== INBOX).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
 self.addEventListener("fetch", e => {
-  const req = e.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;   // fonts etc. go straight to the network
+  const req = e.request, url = new URL(req.url);
+  // Android "Share" -> this app: keep the file's text and open the app, which imports it
+  if (req.method === "POST" && url.pathname.endsWith("/receive-file")) {
+    e.respondWith((async () => {
+      try {
+        const form = await req.formData(), f = form.get("file");
+        if (f && f.text) {
+          const inbox = await caches.open(INBOX);
+          await inbox.put("./inbox-file", new Response(await f.text(), { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
+        }
+      } catch (err) { /* nothing to keep: the app simply opens */ }
+      return Response.redirect("./?received=1", 303);
+    })());
+    return;
+  }
+  if (req.method !== "GET" || url.origin !== location.origin) return;
   e.respondWith(
     fetch(req).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
