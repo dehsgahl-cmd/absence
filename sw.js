@@ -1,6 +1,6 @@
 ﻿// Offline support: keeps a copy of the app on the device. The page is fetched fresh when online
 // (so updates arrive), and the saved copy is used when there is no internet.
-const CACHE = "absence-202610221657";
+const CACHE = "absence-202610221706";
 const INBOX = "absence-inbox";   // a file shared into the app from WhatsApp etc. waits here for the page
 const FILES = ["./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png"];
@@ -21,14 +21,20 @@ self.addEventListener("fetch", e => {
   if (req.method === "POST" && url.pathname.endsWith("/receive-file")) {
     e.respondWith((async () => {
       try {
-        const form = await req.formData();
-        // the file normally comes as "file"; take the first file of any field in case an app names it differently
-        let f = form.get("file");
-        if (!f || !f.text) for (const [, v] of form.entries()) if (v && v.text) { f = v; break; }
-        if (f && f.text) {
-          const inbox = await caches.open(INBOX);
-          await inbox.put("./inbox-file", new Response(await f.text(), { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
+        const form = await req.formData(), inbox = await caches.open(INBOX);
+        // WhatsApp also sends the file's name as text; that text can arrive as a file of its own.
+        // Read every file that came and keep the one holding the program's data.
+        let chosen = null, first = null;
+        for (const [, v] of form.entries()) {
+          if (!v || typeof v !== "object" || !v.text) continue;
+          const t = await v.text();
+          if (first === null) first = t;
+          if (t.indexOf('"iq-absence"') >= 0 || t.indexOf('"sections"') >= 0) { chosen = t; break; }
         }
+        const body = chosen !== null ? chosen : first;
+        const note = ["title", "text", "url"].map(k => form.get(k)).filter(Boolean).join(" ");
+        if (body !== null) await inbox.put("./inbox-file", new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
+        else if (note) await inbox.put("./inbox-note", new Response(note, { headers: { "Content-Type": "text/plain; charset=utf-8" } }));
       } catch (err) { /* nothing to keep: the app simply opens */ }
       return Response.redirect("./?received=1", 303);
     })());

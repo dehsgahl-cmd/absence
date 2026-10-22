@@ -970,6 +970,10 @@ function handleImportText(text){
   if (!d || typeof d!=="object"){
     // say what arrived (size and first characters) so a screenshot of this message shows the cause
     const s=String(text||"");
+    if (s.length<300 && s.indexOf("{")<0 && /\.(json|txt)(\s|\)|$)/i.test(s)){   // only the file's name came, not its contents
+      alert("وصل اسم الملف فقط وليس محتواه:\n«"+s.trim().slice(0,80)+"»\n\nهذا يحدث أحياناً عند المشاركة من واتساب بالضغط المطوّل.\nالحل:\n١. في واتساب اضغط على الملف مرة واحدة ليُحمَّل.\n٢. ارجع إلى البرنامج واضغط «فتح ملف مستلم».\n٣. اختر الملف من «التنزيلات» أو مجلد «WhatsApp».");
+      return;
+    }
     alert("هذا الملف ليس من ملفات برنامج غيابات الطلبة."
       +"\n\nما وصل: "+(s.length ? `${s.length} حرفاً، يبدأ بـ:\n«${s.slice(0,70).replace(/\s+/g," ")}»` : "ملف فارغ")
       +"\n\nإذا تكرر ذلك: احفظ الملف من واتساب، ثم اضغط «فتح ملف مستلم» واختره.");
@@ -1216,6 +1220,8 @@ if (!APP && /^https?:$/.test(location.protocol)){
     history.replaceState(null, "", location.pathname);
     caches.open("absence-inbox").then(async box=>{
       const res=await box.match("./inbox-file");
+      const note=await box.match("./inbox-note");
+      if (!res && note){ const t=await note.text(); await box.delete("./inbox-note"); setTimeout(()=>handleImportText(t), 300); return; }
       if (!res){
         alert("فُتح البرنامج من قائمة المشاركة لكن الملف لم يصل إليه.\n\nاحذف أيقونة البرنامج من الشاشة الرئيسية، ثم افتح الرابط في Chrome وثبّته من جديد (القائمة ⋮ ← تثبيت التطبيق)، وأعد المحاولة.\nأو احفظ الملف واضغط «فتح ملف مستلم».");
         return;
