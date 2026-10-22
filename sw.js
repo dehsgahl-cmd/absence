@@ -1,6 +1,6 @@
 ﻿// Offline support: keeps a copy of the app on the device. The page is fetched fresh when online
 // (so updates arrive), and the saved copy is used when there is no internet.
-const CACHE = "absence-202610221437";
+const CACHE = "absence-202610221549";
 const FILES = ["./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png"];
 
