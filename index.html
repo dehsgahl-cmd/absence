@@ -968,8 +968,10 @@ function parseReceived(text){
 function handleImportText(text){
   const d=parseReceived(text);
   if (!d || typeof d!=="object"){
+    // say what arrived (size and first characters) so a screenshot of this message shows the cause
     const s=String(text||"");
-    alert("هذا الملف ليس من ملفات برنامج غيابات الطلبة."+(s.length ? "" : "\n(وصل الملف فارغاً)")
+    alert("هذا الملف ليس من ملفات برنامج غيابات الطلبة."
+      +"\n\nما وصل: "+(s.length ? `${s.length} حرفاً، يبدأ بـ:\n«${s.slice(0,70).replace(/\s+/g," ")}»` : "ملف فارغ")
       +"\n\nإذا تكرر ذلك: احفظ الملف من واتساب، ثم اضغط «فتح ملف مستلم» واختره.");
     return;
   }
