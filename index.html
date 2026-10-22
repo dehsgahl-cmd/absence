@@ -956,8 +956,23 @@ function importData(inp){
   r.readAsText(f); inp.value="";
 }
 // also called by the Android app when a file is opened from WhatsApp, Telegram, Files...
+// reads the program's data out of a received file, tolerating what apps sometimes add on the way
+// (a BOM, spaces, a caption before or after the data)
+function parseReceived(text){
+  let t=String(text||"").replace(/^﻿/,"").trim();
+  try{ return JSON.parse(t); }catch(e){}
+  const a=t.indexOf("{"), b=t.lastIndexOf("}");
+  if (a>=0 && b>a){ try{ return JSON.parse(t.slice(a,b+1)); }catch(e){} }
+  return null;
+}
 function handleImportText(text){
-  let d; try{ d=JSON.parse(text); }catch(e){ alert("هذا الملف ليس من ملفات برنامج غيابات الطلبة."); return; }
+  const d=parseReceived(text);
+  if (!d || typeof d!=="object"){
+    const s=String(text||"");
+    alert("هذا الملف ليس من ملفات برنامج غيابات الطلبة."+(s.length ? "" : "\n(وصل الملف فارغاً)")
+      +"\n\nإذا تكرر ذلك: احفظ الملف من واتساب، ثم اضغط «فتح ملف مستلم» واختره.");
+    return;
+  }
   if (d.kind==="section-share" && d.section){ receiveShare(d); return; }   // a section sent by a co-teacher
   if (d.kind==="section-handover" && d.section){ receiveHandover(d); return; }   // a ready section from the head of department
   if (d.sections && d.sections.length){   // backup of all sections
@@ -1198,7 +1213,11 @@ if (!APP && /^https?:$/.test(location.protocol)){
   if (/[?&]received=1/.test(location.search) && window.caches){
     history.replaceState(null, "", location.pathname);
     caches.open("absence-inbox").then(async box=>{
-      const res=await box.match("./inbox-file"); if (!res) return;
+      const res=await box.match("./inbox-file");
+      if (!res){
+        alert("فُتح البرنامج من قائمة المشاركة لكن الملف لم يصل إليه.\n\nاحذف أيقونة البرنامج من الشاشة الرئيسية، ثم افتح الرابط في Chrome وثبّته من جديد (القائمة ⋮ ← تثبيت التطبيق)، وأعد المحاولة.\nأو احفظ الملف واضغط «فتح ملف مستلم».");
+        return;
+      }
       const text=await res.text(); await box.delete("./inbox-file");
       setTimeout(()=>handleImportText(text), 300);
     }).catch(()=>{});
