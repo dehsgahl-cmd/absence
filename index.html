@@ -179,10 +179,10 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18
   <div class="box">
     <h2>سجل غيابات الطلبة</h2>
     <div>برنامج لأستاذ المادة لمتابعة غيابات الطلبة الأسبوعية واحتساب نسب الغياب
-      (تنبيه، إنذار أولي، إنذار نهائي، رسوب بالغياب بدون عذر، رسوب بالغياب بعذر)
+      (تنبيه، إنذار أولي، إنذار نهائي، رسوب بالغياب، مع رفع حد الرسوب لمن قبل مجلس الكلية عذره)
       وإعداد الموقف الأسبوعي وطلب إصدار الأمر الإداري، وفق تعليمات وزارة التعليم العالي والبحث العلمي.</div>
     <div class="own">حقوق البرنامج محفوظة لـ أ.د. ضياء مسلم عبد الامير</div>
-    <div style="color:var(--muted);font-size:13px">الإصدار 1.6</div>
+    <div style="color:var(--muted);font-size:13px">الإصدار 1.7</div>
     <button class="btn" style="margin-top:12px" onclick="document.getElementById('about').classList.remove('on')">إغلاق</button>
     <div style="margin-top:14px"><a href="#" id="headLink" style="font-size:12.5px;color:var(--muted)" onclick="toggleHeadMode();return false;">وضع رئيس القسم</a></div>
   </div>
@@ -269,11 +269,11 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18
 
   <h3>نسب الغياب (من مجموع الساعات المقررة)</h3>
   <div class="grid">
-    <div><label>تنبيه عند بلوغ الغياب بدون عذر (%)</label><input type="number" step="0.5" data-t="notice"></div>
-    <div><label>إنذار أولي عند بلوغ الغياب بدون عذر (%)</label><input type="number" step="0.5" data-t="warn"></div>
-    <div><label>إنذار نهائي عند بلوغ الغياب بدون عذر (%)</label><input type="number" step="0.5" data-t="final"></div>
-    <div><label>رسوب بالغياب بدون عذر عند تجاوز (%)</label><input type="number" step="0.5" data-t="failU"></div>
-    <div><label>رسوب بالغياب بعذر عند تجاوز مجموع الغياب (%)</label><input type="number" step="0.5" data-t="failT"></div>
+    <div><label>تنبيه عند بلوغ الغياب (%)</label><input type="number" step="0.5" data-t="notice"></div>
+    <div><label>إنذار أولي عند بلوغ الغياب (%)</label><input type="number" step="0.5" data-t="warn"></div>
+    <div><label>إنذار نهائي عند بلوغ الغياب (%)</label><input type="number" step="0.5" data-t="final"></div>
+    <div><label>رسوب بالغياب عند تجاوز (%)</label><input type="number" step="0.5" data-t="failU"></div>
+    <div><label>رسوب بالغياب لمن قبل مجلس الكلية عذره عند تجاوز (%)</label><input type="number" step="0.5" data-t="failT"></div>
   </div>
   <div class="note" id="hoursHint"></div>
 </section>
@@ -304,8 +304,8 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18
     <span>لكل ساعة خانة بتاريخها:</span>
     <span><b style="border:1px solid var(--line);width:auto;padding:0 6px">بدون ضغط</b> حاضر</span>
     <span><b style="background:#ffd9d9;color:#b00020;width:auto;padding:0 6px">ضغطة</b> غائب</span>
-    <span><b style="background:#dbeafe;color:#1d4ed8;width:auto;padding:0 6px">ضغطة ثانية</b> مجاز (بعذر)</span>
-    <span><b style="border:1px solid var(--line);width:auto;padding:0 6px">ضغطة ثالثة</b> يرجع حاضراً</span>
+    <span><b style="border:1px solid var(--line);width:auto;padding:0 6px">ضغطة ثانية</b> يرجع حاضراً</span>
+    <span>العذر لا يُسجَّل هنا: يقبله مجلس الكلية ويُؤشَّر للطالب في تبويب «الطلبة».</span>
   </div>
   <div class="scroll"><table id="weekTable"></table></div>
 
@@ -325,6 +325,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;padding:6px 10px 18
         <option value="ch">تغيّر موقفهم ولم يُرفع بهم موقف</option>
         <option value="1">تنبيه</option><option value="2">إنذار أولي</option><option value="3">إنذار نهائي</option>
         <option value="4">راسب بالغياب بدون عذر</option><option value="5">راسب بالغياب بعذر</option>
+        <option value="exc">لديهم عذر مقبول من مجلس الكلية</option>
       </select>
     </div>
   </div>
@@ -463,36 +464,37 @@ function weekRange(week, fmtD){
 }
 
 /* ---------- calculation (cumulative up to a week) ---------- */
+// Only the college council accepts an excuse, for the whole course: st.exc = {no, date} raises the fail
+// limit from th.failU to th.failT. Every marked hour is an absence ("e" marks left by older copies count too).
 function calc(st, upto){
   upto = upto || WEEKS();
-  let u=0,e=0;
+  let a=0;
   for (const wk in st.w){
     if (+wk > upto) continue;
-    for (const id in st.w[wk]){ const h=lecHours(id); if (st.w[wk][id]==="u") u+=h; else e+=h; }
+    for (const id in st.w[wk]) a+=lecHours(id);
   }
-  const T = TOTAL() || 1, th = S.th;
-  const up = u/T*100, tp = (u+e)/T*100;
+  const T = TOTAL() || 1, th = S.th, exc = !!st.exc;
+  const p = a/T*100;
   let lvl = 0;
-  if (up > th.failU) lvl = 4;
-  else if (tp > th.failT) lvl = 5;
-  // warnings count only unexcused absence: an excused (مجاز) absence never earns a warning
-  else if (up >= th.final) lvl = 3;
-  else if (up >= th.warn) lvl = 2;
-  else if (up >= th.notice) lvl = 1;
-  return {u,e,up,tp,lvl,changed: lvl !== (st.reported||0) && lvl > 0};
+  if (p > (exc ? th.failT : th.failU)) lvl = exc ? 5 : 4;
+  else if (p >= th.final) lvl = 3;
+  else if (p >= th.warn) lvl = 2;
+  else if (p >= th.notice) lvl = 1;
+  return {a,p,exc,lvl,changed: lvl !== (st.reported||0) && lvl > 0};
 }
+const excTxt = st => st.exc ? "عذر مقبول من مجلس الكلية"+(st.exc.no?` (القرار ${st.exc.no}${st.exc.date?" في "+st.exc.date:""})`:"") : "";
 function absDates(st, upto){
   const out=[];
   for (let wk=1; wk<=(upto||WEEKS()); wk++){
     const a=st.w[wk]; if(!a) continue;
     for (const l of SCHED()) {
-      let u=0,e=0;
-      for (let h=1; h<=l.hours; h++){ const v=a[l.id+"_"+h]; if(v==="u") u++; else if(v==="e") e++; }
-      if (!u && !e) continue;
+      let u=0;
+      for (let h=1; h<=l.hours; h++) if (a[l.id+"_"+h]) u++;
+      if (!u) continue;
       const d=lecDate(wk,l);
       // RLM marks keep each "date + hours" entry together in right-to-left text (screen, PDF and Word)
       // day/month when the term start date is known; otherwise the lecture's weekday and week number
-      out.push("‏"+(d?dm(d):`${DAYS[l.day]} الأسبوع ${wk}`)+"‏"+(u?` غ${u}‏`:"")+(e?` م${e}‏`:""));
+      out.push("‏"+(d?dm(d):`${DAYS[l.day]} الأسبوع ${wk}`)+"‏"+` غ${u}‏`);
     }
   }
   return out.join("، ");
@@ -609,7 +611,7 @@ function renderHead(){
 async function handoverSection(){
   if (!IN_HEAD) return;
   if (!S.students.length && !confirm("هذه الشعبة لا تحتوي أسماء طلبة بعد. إرسالها رغم ذلك؟")) return;
-  const sec=JSON.parse(JSON.stringify({id:S.id, info:S.info, students:S.students.map(s=>({id:s.id, name:s.name, w:s.w, reported:0})), log:[]}));
+  const sec=JSON.parse(JSON.stringify({id:S.id, info:S.info, students:S.students.map(s=>({id:s.id, name:s.name, w:s.w, reported:0, exc:s.exc})), log:[]}));
   SHARED.forEach(k=>delete sec.info[k]); delete sec.info.coSigs;
   const payload={app:"iq-absence", kind:"section-handover", version:1, at:new Date().toISOString(), section:sec};
   const name=`قائمة_${sectionLabel(S).replace(/[\\/:*?"<>|–]/g,"").replace(/\s+/g,"_")}.json`;
@@ -640,15 +642,18 @@ function receiveHandover(d){
     alert(`تمت إضافة الشعبة «${sectionLabel(S)}» بأسماء طلبتها.\nاكتب اسمك ولقبك وضع صورة توقيعك في تبويب «معلومات المادة» إن لم تفعل بعد، ثم ابدأ تسجيل الغياب.`);
     return;
   }
-  // the same section again: add students who are new, keep every absence already recorded
+  // the same section again: add students who are new, take the excuses the head has marked
+  // (college council decisions), and keep every absence already recorded
   switchSection(local.id);
-  let added=0;
+  let added=0, excs=0;
   for (const is of inc.students){
-    if (S.students.some(x=>x.id===is.id || norm(x.name)===norm(is.name))) continue;
-    S.students.push({id:is.id, name:is.name, w:{}, reported:0}); added++;
+    const st=S.students.find(x=>x.id===is.id || norm(x.name)===norm(is.name));
+    if (!st){ S.students.push({id:is.id, name:is.name, w:{}, reported:0, exc:is.exc}); added++; continue; }
+    if (is.exc && JSON.stringify(st.exc)!==JSON.stringify(is.exc)){ st.exc=is.exc; excs++; }
   }
   save(); renderAll();
-  alert(added ? `أُضيف ${added} طالب جديد إلى «${sectionLabel(S)}». الغيابات المسجّلة بقيت كما هي.` : "قائمة الطلبة عندك مطابقة لما أرسله رئيس القسم، ولم يتغيّر شيء.");
+  const msg=[added && `أُضيف ${added} طالب جديد`, excs && `سُجّل عذر مجلس الكلية لـ ${excs} طالب`].filter(Boolean);
+  alert(msg.length ? `${msg.join("، و")} في «${sectionLabel(S)}». الغيابات المسجّلة بقيت كما هي.` : "قائمة الطلبة عندك مطابقة لما أرسله رئيس القسم، ولم يتغيّر شيء.");
 }
 
 /* ---------- sharing a section with a co-teacher ----------
@@ -710,6 +715,7 @@ function receiveShare(d){
       if (Object.keys(a).length) st.w[wk]=a; else delete st.w[wk];
     }
     st.reported=Math.max(st.reported||0, is.reported||0);
+    if (is.exc && !st.exc){ st.exc=is.exc; changes++; }   // a council excuse marked by my colleague
   }
   const seen=new Set(S.log.map(l=>JSON.stringify(l)));
   (inc.log||[]).forEach(l=>{ if(!seen.has(JSON.stringify(l))) S.log.push(l); });
@@ -765,7 +771,7 @@ function renderHeader(){
   const T=TOTAL(), th=S.th, h=p=>fmt(T*p/100);
   document.getElementById("totalOut").textContent = `${fmt(T)} ساعة  (${fmt(WH())} ساعة أسبوعياً × ${fmt(WEEKS())} أسبوع)`;
   document.getElementById("hoursHint").innerHTML = T ?
-    `بمجموع <b>${fmt(T)}</b> ساعة: التنبيه عند <b>${h(th.notice)}</b> ساعة غياب بدون عذر (الغياب المجاز لا يُحسب في التنبيه والإنذارات)، الإنذار الأولي عند <b>${h(th.warn)}</b>، الإنذار النهائي عند <b>${h(th.final)}</b>، الرسوب بدون عذر إذا تجاوز <b>${h(th.failU)}</b> ساعة، والرسوب بعذر إذا تجاوز مجموع الغياب <b>${h(th.failT)}</b> ساعة.` :
+    `بمجموع <b>${fmt(T)}</b> ساعة: التنبيه عند <b>${h(th.notice)}</b> ساعة غياب، الإنذار الأولي عند <b>${h(th.warn)}</b>، الإنذار النهائي عند <b>${h(th.final)}</b>، والرسوب بالغياب إذا تجاوز <b>${h(th.failU)}</b> ساعة. إذا قبل مجلس الكلية عذر الطالب (يُؤشَّر في تبويب «الطلبة») يرتفع حد الرسوب عنده إلى <b>${h(th.failT)}</b> ساعة.` :
     "أضف محاضرات الجدول الأسبوعي وعدد الأسابيع لحساب النسب.";
 }
 
@@ -781,19 +787,34 @@ function sortStudents(){ S.students.sort((a,b)=>a.name.localeCompare(b.name,"ar"
 function clearStudents(){ if(confirm("حذف جميع الطلبة وسجلات غيابهم؟")){ S.students=[]; save(); renderStudents(); } }
 function delStudent(id){ const s=S.students.find(x=>x.id===id); if(confirm("حذف الطالب: "+s.name+"؟")){ S.students=S.students.filter(x=>x.id!==id); save(); renderStudents(); } }
 function renameStudent(id,v){ const s=S.students.find(x=>x.id===id); s.name=v.trim()||s.name; save(); }
+// the college council's decision accepting a student's excuse (raises the fail limit to th.failT)
+function setExc(id, on){
+  const s=S.students.find(x=>x.id===id);
+  if (on){
+    const no=prompt(`عذر مشروع مقبول من مجلس الكلية للطالب:\n${s.name}\n\nرقم قرار مجلس الكلية (اختياري):`, "");
+    if (no===null){ renderStudents(); return; }
+    const date=prompt("تاريخ القرار (اختياري):", "");
+    s.exc={no:no.trim(), date:(date||"").trim()};
+  } else {
+    if (!confirm(`إلغاء العذر المسجّل للطالب ${s.name}؟`)){ renderStudents(); return; }
+    delete s.exc;
+  }
+  save(); renderStudents();
+}
 function renderStudents(){
-  document.getElementById("stTable").innerHTML = `<tr><th>ت</th><th class="name">اسم الطالب (قابل للتعديل)</th><th>حذف</th></tr>` +
-    (S.students.map((s,i)=>`<tr><td>${i+1}</td><td class="name"><input value="${esc(s.name)}" onchange="renameStudent('${s.id}',this.value)" style="border:none"></td><td><span class="del" onclick="delStudent('${s.id}')">✕ حذف</span></td></tr>`).join("") ||
-    `<tr><td colspan="3" style="color:var(--muted)">لا يوجد طلبة بعد</td></tr>`);
+  document.getElementById("stTable").innerHTML = `<tr><th>ت</th><th class="name">اسم الطالب (قابل للتعديل)</th><th>عذر مقبول من مجلس الكلية</th><th>حذف</th></tr>` +
+    (S.students.map((s,i)=>`<tr><td>${i+1}</td><td class="name"><input value="${esc(s.name)}" onchange="renameStudent('${s.id}',this.value)" style="border:none"></td><td style="white-space:normal;font-size:12.5px"><label style="display:flex;gap:6px;align-items:center;justify-content:center;margin:0"><input type="checkbox" style="width:auto" ${s.exc?"checked":""} onchange="setExc('${s.id}',this.checked)">${s.exc&&(s.exc.no||s.exc.date)?esc([s.exc.no&&"القرار "+s.exc.no, s.exc.date].filter(Boolean).join(" – ")):""}</label></td><td><span class="del" onclick="delStudent('${s.id}')">✕ حذف</span></td></tr>`).join("") ||
+    `<tr><td colspan="4" style="color:var(--muted)">لا يوجد طلبة بعد</td></tr>`);
 }
 
 /* ---------- weekly attendance ---------- */
 function setWeek(w){ curWeek = Math.min(WEEKS(), Math.max(1, w)); S.curWeek = curWeek; save(); renderAtt(); }
-// one box per lecture hour: empty = present, 1st click = absent, 2nd click = excused (مجاز), 3rd click = present again
-const cellHTML = (a, date) => a==="u" ? `غائب<span class="cd">${date}</span>` : a==="e" ? `مجاز<span class="cd">${date}</span>` : `<span class="cd">${date}</span>`;
+// one box per lecture hour: empty = present, 1st click = absent, 2nd click = present again
+// (no per-hour excuse: the college council excuses a student for the course, see setExc)
+const cellHTML = (a, date) => a ? `غائب<span class="cd">${date}</span>` : `<span class="cd">${date}</span>`;
 function toggle(sid, key, td){
   const st=S.students.find(x=>x.id===sid), wk=st.w[curWeek]=st.w[curWeek]||{}, cur=wk[key];
-  const nx = !cur ? "u" : cur==="u" ? "e" : null;
+  const nx = cur ? null : "u";
   if (nx) wk[key]=nx; else delete wk[key];
   if (!Object.keys(wk).length) delete st.w[curWeek];
   td.className="c "+(nx||""); td.innerHTML=cellHTML(nx, td.dataset.d);
@@ -802,8 +823,8 @@ function toggle(sid, key, td){
 function updateRow(st){
   const tr=document.getElementById("r_"+st.id); if(!tr) return;
   const r=calc(st);
-  tr.querySelector(".tu").textContent=fmt(r.u); tr.querySelector(".te").textContent=fmt(r.e);
-  tr.querySelector(".tp").textContent=fmt(r.up)+"%";
+  tr.querySelector(".tu").textContent=fmt(r.a);
+  tr.querySelector(".tp").textContent=fmt(r.p)+"%";
   tr.querySelector(".ts").innerHTML=badge(r.lvl)+(r.changed?' <b style="color:var(--pri)" title="تغيّر موقفه">●</b>':'');
 }
 function renderAtt(){
@@ -817,14 +838,14 @@ function renderAtt(){
   const ld = L.map(l=>{const d=lecDate(curWeek,l); return d?dm(d):"";});
   t.innerHTML=`<tr><th rowspan="2">ت</th><th rowspan="2" class="name">الاسم</th>`+
     L.map((l,j)=>{const d=lecDate(curWeek,l);return `<th colspan="${hrs(l).length}" class="lec">${DAYS[l.day]} ${d?dmy(d):""}<span class="th-s">${l.type}${isMe(l.by)?"":" · "+esc(l.by)}</span></th>`;}).join("")+
-    `<th rowspan="2">مجموع الغياب (س)</th><th rowspan="2">مجموع المجاز (س)</th><th rowspan="2">النسبة بدون عذر</th><th rowspan="2">الموقف</th></tr><tr>`+
+    `<th rowspan="2">مجموع الغياب (س)</th><th rowspan="2">نسبة الغياب</th><th rowspan="2">الموقف</th></tr><tr>`+
     L.map(l=>hrs(l).map(h=>`<th class="hr">الساعة ${h.toLocaleString("ar-IQ")}</th>`).join("")).join("")+`</tr>`+
     S.students.map((s,i)=>{
       const wk=s.w[curWeek]||{};
       return `<tr id="r_${s.id}"><td>${i+1}</td><td class="name">${esc(s.name)}</td>`+
         L.map((l,j)=>hrs(l).map(h=>{const k=l.id+"_"+h, a=wk[k]||"";
-          return `<td class="c ${a} ${h===1?"first":""}" data-d="${ld[j]}" onclick="toggle('${s.id}','${k}',this)">${cellHTML(a,ld[j])}</td>`;}).join("")).join("")+
-        `<td class="tu"></td><td class="te"></td><td class="tp"></td><td class="ts"></td></tr>`;
+          return `<td class="c ${a?"u":""} ${h===1?"first":""}" data-d="${ld[j]}" onclick="toggle('${s.id}','${k}',this)">${cellHTML(a,ld[j])}</td>`;}).join("")).join("")+
+        `<td class="tu"></td><td class="tp"></td><td class="ts"></td></tr>`;
     }).join("");
   S.students.forEach(updateRow);
   renderGrid();
@@ -837,11 +858,10 @@ function renderGrid(){
     S.students.map(s=>{
       const r=calc(s);
       return `<tr><td class="name">${esc(s.name)}</td>`+wk.map(w=>{
-        let u=0,e=0; const a=s.w[w]||{};
-        for(const id in a){ if(a[id]==="u") u+=lecHours(id); else e+=lecHours(id); }
-        const c = u&&e ? "m" : u ? "u" : e ? "e" : "";
-        return `<td class="g ${c} ${w===curWeek?"cur":""}" onclick="setWeek(${w})">${(u?`<bdi style="color:#b00020">غ${u}</bdi>`:"")+(u&&e?"<br>":"")+(e?`<bdi style="color:#1d4ed8">م${e}</bdi>`:"")}</td>`;
-      }).join("")+`<td>${fmt(r.u+r.e)}</td><td>${badge(r.lvl)}</td></tr>`;
+        let u=0; const a=s.w[w]||{};
+        for(const id in a) u+=lecHours(id);
+        return `<td class="g ${u?"u":""} ${w===curWeek?"cur":""}" onclick="setWeek(${w})">${u?`<bdi style="color:#b00020">غ${u}</bdi>`:""}</td>`;
+      }).join("")+`<td>${fmt(r.a)}</td><td>${badge(r.lvl)}</td></tr>`;
     }).join("")+`</table>`;
 }
 
@@ -855,9 +875,9 @@ function renderStatus(){
     `<div class="stat"><div class="n">${S.students.length}</div><div class="l">عدد الطلبة</div></div>`+
     cnt.map((c,i)=>i?`<div class="stat"><div class="n" style="color:var(--t${i})">${c}</div><div class="l">${STATUS[i]}</div></div>`:"").join("")+
     `<div class="stat" style="border-color:var(--pri)"><div class="n" style="color:var(--pri)">${ch}</div><div class="l">بانتظار رفع الموقف</div></div>`;
-  const list=rows.filter(x=> f==="-1" || (f==="ch"?x.r.changed: x.r.lvl==+f));
-  document.getElementById("statusTable").innerHTML=`<tr><th>ت</th><th class="name">الاسم</th><th>غياب بدون عذر (س)</th><th>غياب بعذر (س)</th><th>نسبة بدون عذر</th><th>نسبة الغياب الكلي</th><th>تواريخ الغياب</th><th>الموقف الحالي</th><th>آخر موقف مرفوع</th></tr>`+
-    (list.map((x,i)=>`<tr><td>${i+1}</td><td class="name">${esc(x.s.name)}</td><td>${fmt(x.r.u)}</td><td>${fmt(x.r.e)}</td><td>${fmt(x.r.up)}%</td><td>${fmt(x.r.tp)}%</td><td class="dates">${absDates(x.s)||"—"}</td><td>${badge(x.r.lvl)}${x.r.changed?' <b style="color:var(--pri)">● جديد</b>':''}</td><td>${(x.s.reported||0)?badge(x.s.reported):"—"}</td></tr>`).join("")||`<tr><td colspan="9" style="color:var(--muted)">لا يوجد</td></tr>`);
+  const list=rows.filter(x=> f==="-1" || (f==="ch"?x.r.changed: f==="exc"?x.r.exc: x.r.lvl==+f));
+  document.getElementById("statusTable").innerHTML=`<tr><th>ت</th><th class="name">الاسم</th><th>ساعات الغياب</th><th>نسبة الغياب</th><th>عذر مجلس الكلية</th><th>تواريخ الغياب</th><th>الموقف الحالي</th><th>آخر موقف مرفوع</th></tr>`+
+    (list.map((x,i)=>`<tr><td>${i+1}</td><td class="name">${esc(x.s.name)}</td><td>${fmt(x.r.a)}</td><td>${fmt(x.r.p)}%</td><td style="white-space:normal;font-size:12.5px">${x.r.exc?esc(excTxt(x.s)):"—"}</td><td class="dates">${absDates(x.s)||"—"}</td><td>${badge(x.r.lvl)}${x.r.changed?' <b style="color:var(--pri)">● جديد</b>':''}</td><td>${(x.s.reported||0)?badge(x.s.reported):"—"}</td></tr>`).join("")||`<tr><td colspan="9" style="color:var(--muted)">لا يوجد</td></tr>`);
 }
 
 /* ---------- weekly letter ---------- */
@@ -878,11 +898,11 @@ function renderLetter(){
   if(!rows.length) body=`<p style="text-align:center;color:#888">لا يوجد طلبة تغيّر موقفهم لغاية الأسبوع (${W}).</p>`;
   // the letter shows both failure kinds (4 = unexcused, 5 = excused) as one group "راسب بالغياب";
   // the calculation and the status tab still tell them apart
-  else for (const grp of [{lv:[1],head:ACTION[1],act:STATUS[1]}, {lv:[2],head:ACTION[2],act:STATUS[2]}, {lv:[3],head:ACTION[3],act:STATUS[3]}, {lv:[4,5],head:"ترسيبهم بالغياب",act:"راسب بالغياب"}]){
+  else for (const grp of [{lv:[1],head:ACTION[1],act:STATUS[1]}, {lv:[2],head:ACTION[2],act:STATUS[2]}, {lv:[3],head:ACTION[3],act:STATUS[3]}, {lv:[4,5],head:"ترسيبهم بالغياب"}]){
     const g=rows.filter(x=>grp.lv.includes(x.r.lvl)); if(!g.length) continue;
     body+=`<div class="grp">• الطلبة المطلوب ${grp.head}:</div>
-      <table><tr><th>ت</th><th>اسم الطالب</th><th>ساعات الغياب بدون عذر</th><th>ساعات الغياب بعذر</th><th>نسبة الغياب بدون عذر</th><th>النسبة الكلية للغياب</th><th>الإجراء المطلوب</th></tr>`+
-      g.map((x,k)=>`<tr><td>${k+1}</td><td class="nm">${esc(x.s.name)}</td><td>${fmt(x.r.u)}</td><td>${fmt(x.r.e)}</td><td>${fmt(x.r.up)}%</td><td>${fmt(x.r.tp)}%</td><td>${grp.act}</td></tr>`).join("")+`</table>`;
+      <table><tr><th>ت</th><th>اسم الطالب</th><th>ساعات الغياب</th><th>نسبة الغياب</th><th>العذر</th><th>الإجراء المطلوب</th></tr>`+
+      g.map((x,k)=>`<tr><td>${k+1}</td><td class="nm">${esc(x.s.name)}</td><td>${fmt(x.r.a)}</td><td>${fmt(x.r.p)}%</td><td>${x.r.exc?"لديه عذر":"ليس لديه عذر"}</td><td>${grp.act||STATUS[x.r.lvl]}</td></tr>`).join("")+`</table>`;
   }
   // "الكوفة" → "جامعة الكوفة", but "جامعة الكوفة" stays as typed
   const pre=(word,v)=>{ v=String(v||"").trim(); return !v ? word+" ......" : v.startsWith(word) ? v : word+" "+v; };
@@ -931,7 +951,7 @@ function copyLetter(){
 function confirmSent(){
   const rows=letterRows(), W=letterWeek(); if(!rows.length){alert("لا يوجد طلبة في هذا الموقف.");return;}
   if(!confirm(`تأكيد إرسال موقف الأسبوع (${W}) بـ ${rows.length} طالب/ة؟`))return;
-  S.log.unshift({no:document.getElementById("lNo").value,date:document.getElementById("lDate").value,week:W,items:rows.map(x=>({name:x.s.name,lvl:x.r.lvl,up:x.r.up}))});
+  S.log.unshift({no:document.getElementById("lNo").value,date:document.getElementById("lDate").value,week:W,items:rows.map(x=>({name:x.s.name,lvl:x.r.lvl,up:x.r.p}))});
   rows.forEach(x=>x.s.reported=x.r.lvl); document.getElementById("lNo").value=""; save(); renderLetter();
 }
 function renderLog(){
@@ -1124,7 +1144,8 @@ async function makePdf(){
 /* minimal .docx writer: builds the Word XML from the letter as shown (including any edits) */
 function makeDocx(){
   const L=document.getElementById("letter");
-  const x=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // a zero-width joiner inside «محمد» stops Word drawing it as the one-glyph ligature that reads like «مجد»
+  const x=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/محمد/g,"مح‍مد");
   // Latin-digit runs such as dates (11/10/2026) go in left-to-right runs, otherwise Word shows them reversed
   const run1=(t,o,rtl)=>`<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>${o.b?"<w:b/><w:bCs/>":""}${o.u?'<w:u w:val="single"/>':""}<w:sz w:val="${o.sz||28}"/><w:szCs w:val="${o.sz||28}"/>${rtl?"<w:rtl/>":""}</w:rPr><w:t xml:space="preserve">${x(t)}</w:t></w:r>`;
   // an RLM splits the text first, so "20‏/‏10‏/‏2026" stays right to left in Word as it is on screen
@@ -1161,10 +1182,15 @@ function makeDocx(){
           }
           return cell(sgXml,cw);
         }).join("");
-        body+=para("",{after:300})+table(`<w:tr>${cell(para(txt(att)),cw)}${sgCells}</w:tr>`,noBorders,Array(sgs.length+1).fill(cw));
+        // cantSplit keeps each signature with its name and date on one page
+        body+=para("",{after:300})+table(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cell(para(txt(att)),cw)}${sgCells}</w:tr>`,noBorders,Array(sgs.length+1).fill(cw));
       } else if (e.tagName==="TABLE"){
         // column widths follow the on-screen table, scaled to the 9638-twip text width of A4 with 2cm margins
-        const px=[...e.rows[0].cells].map(c=>c.offsetWidth||1), sum=px.reduce((a,b)=>a+b,0), tw=px.map(p=>Math.round(9638*p/sum));
+        const px=[...e.rows[0].cells].map(c=>c.offsetWidth||1), sum=px.reduce((a,b)=>a+b,0);
+        let tw=px.map(p=>Math.round(9638*p/sum));
+        // the name column gets at least 28% of the width (the phone screen squeezes it), the rest share what is left
+        const ni=[...(e.rows[1]||e.rows[0]).cells].findIndex(c=>c.classList.contains("nm")), minN=2700;
+        if (ni>=0 && tw[ni]<minN){ const rest=9638-tw[ni], k=(9638-minN)/rest; tw=tw.map((v,i)=>i===ni?minN:Math.round(v*k)); }
         const rows=[...e.rows].map((tr,ri)=>`<w:tr>${ri?"":'<w:trPr><w:tblHeader/></w:trPr>'}`+[...tr.cells].map((td,ci)=>cell(para(txt(td),{sz:22,b:ri===0,jc:td.classList.contains("nm")?null:"center",after:0}),tw[ci]||1100,ri===0)).join("")+`</w:tr>`).join("");
         body+=table(rows,allBorders,tw);
       } else if (e.tagName==="DIV" && !e.className && e.children.length){
